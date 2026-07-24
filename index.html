@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Фильтры камеры</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            background-color: #000;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        #camera-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+        }
+
+        /* Видео с камеры */
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: filter 0.3s ease; /* Плавный переход для Ч/Б */
+        }
+
+        /* Класс для Ч/Б эффекта на видео */
+        video.grayscale {
+            filter: grayscale(100%);
+        }
+
+        /* Полупрозрачный слой цветной линзы */
+        #filter-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background-color: transparent;
+            transition: background-color 0.2s ease;
+            z-index: 5;
+        }
+
+        /* Панель управления */
+        #controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 16px 12px;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+            z-index: 10;
+        }
+
+        /* Кнопки */
+        button {
+            padding: 12px 8px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+            cursor: pointer;
+            flex: 1 1 calc(33.333% - 8px);
+            min-width: 80px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        button:active {
+            opacity: 0.8;
+            transform: scale(0.98);
+        }
+
+        /* Цвета фильтров */
+        #btn-red { background: rgba(229, 57, 53, 0.9); }
+        #btn-green { background: rgba(67, 160, 71, 0.9); }
+        #btn-blue { background: rgba(30, 136, 229, 0.9); }
+        #btn-yellow { background: rgba(253, 216, 53, 0.9); color: #000; text-shadow: none; }
+        #btn-orange { background: rgba(251, 140, 0, 0.9); }
+        #btn-purple { background: rgba(142, 36, 170, 0.9); }
+        #btn-cyan { background: rgba(0, 172, 193, 0.9); }
+        #btn-pink { background: rgba(216, 27, 96, 0.9); }
+        
+        /* Спец. кнопки */
+        #btn-bw { 
+            background: #e0e0e0; 
+            color: #000; 
+            text-shadow: none;
+            flex: 1 1 calc(50% - 8px); /* Половина ширины */
+        }
+        #btn-none { 
+            background: #424242; 
+            flex: 1 1 calc(50% - 8px); /* Половина ширины */
+        }
+
+        /* Сообщение об ошибке */
+        #error-message {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            background: rgba(30, 30, 30, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            display: none;
+            width: 85%;
+            z-index: 20;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="camera-container">
+        <video id="camera" autoplay playsinline webkit-playsinline muted></video>
+        <div id="filter-overlay"></div>
+    </div>
+
+    <div id="controls">
+        <button id="btn-red" onclick="setColorFilter('rgba(255, 0, 0, 0.35)')">Красный</button>
+        <button id="btn-green" onclick="setColorFilter('rgba(0, 255, 0, 0.35)')">Зелёный</button>
+        <button id="btn-blue" onclick="setColorFilter('rgba(0, 0, 255, 0.35)')">Синий</button>
+        <button id="btn-yellow" onclick="setColorFilter('rgba(255, 255, 0, 0.35)')">Жёлтый</button>
+        <button id="btn-orange" onclick="setColorFilter('rgba(255, 120, 0, 0.35)')">Оранжевый</button>
+        <button id="btn-purple" onclick="setColorFilter('rgba(128, 0, 128, 0.35)')">Фиолетовый</button>
+        <button id="btn-cyan" onclick="setColorFilter('rgba(0, 255, 255, 0.35)')">Голубой</button>
+        <button id="btn-pink" onclick="setColorFilter('rgba(255, 20, 147, 0.35)')">Розовый</button>
+        
+        <!-- Новая кнопка Ч/Б и "Без фильтра" теперь в одном ряду -->
+        <button id="btn-bw" onclick="toggleGrayscale()">Ч/Б</button>
+        <button id="btn-none" onclick="clearFilters()">Без фильтра</button>
+    </div>
+
+    <div id="error-message"></div>
+
+    <script>
+        const video = document.getElementById('camera');
+        const overlay = document.getElementById('filter-overlay');
+        const errorMessage = document.getElementById('error-message');
+
+        // Устанавливает цветной фильтр (и выключает Ч/Б)
+        function setColorFilter(color) {
+            video.classList.remove('grayscale'); // Выключаем Ч/Б
+            overlay.style.backgroundColor = color; // Включаем цвет
+        }
+
+        // Переключает Ч/Б фильтр (и выключает цветной)
+        function toggleGrayscale() {
+            overlay.style.backgroundColor = 'transparent'; // Выключаем цвет
+            video.classList.toggle('grayscale'); // Переключаем Ч/Б
+        }
+
+        // Полностью выключает все фильтры
+        function clearFilters() {
+            video.classList.remove('grayscale'); // Выключаем Ч/Б
+            overlay.style.backgroundColor = 'transparent'; // Выключаем цвет
+        }
+
+        function showError(msg) {
+            errorMessage.innerHTML = msg;
+            errorMessage.style.display = 'block';
+        }
+
+        async function initCamera() {
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                showError('<b>Требуется HTTPS</b><br><br>Камера работает только по защищенному протоколу https://');
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showError('Ваш браузер не поддерживает доступ к камере.');
+                return;
+            }
+
+            try {
+                const constraints = {
+                    video: { 
+                        facingMode: { ideal: 'environment' } 
+                    }
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                await video.play();
+                errorMessage.style.display = 'none';
+            } catch (err) {
+                console.error('Ошибка видео:', err);
+                let reason = 'Неизвестная ошибка';
+                
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    reason = 'Доступ к камере заблокирован. Разрешите доступ к камере в настройках браузера/телефона.';
+                } else if (err.name === 'NotFoundError') {
+                    reason = 'Камера не найдена.';
+                } else if (err.name === 'NotReadableError') {
+                    reason = 'Камера уже занята другим приложением.';
+                }
+                
+                showError(`<b>Не удалось запустить камеру</b><br><br>${reason}`);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', initCamera);
+        document.body.addEventListener('click', () => {
+            if (video.paused && video.srcObject) {
+                video.play();
+            }
+        });
+    </script>
+</body>
+</html>
